@@ -28,10 +28,19 @@ func main() {
 	signal.Notify(ch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		if err := repl.Run(ctx); err != nil {
-			fmt.Println(err)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if err := repl.Run(ctx); err != nil {
+				fmt.Println(err)
+			}
+			// after 10 seconds, restart
+			fmt.Println("restarting ...")
+			time.Sleep(10 * time.Second)
 		}
-		ch <- os.Interrupt
 	}()
 	<-ch
 	cancel()
