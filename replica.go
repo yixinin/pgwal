@@ -89,3 +89,9 @@ func (r *Replication) Run(ctx context.Context) (err error) {
 		}
 	}
 }
+
+func (r *Replication) SendStandbyState(ctx context.Context) error {
+	var update = pglogrepl.StandbyStatusUpdate{WALWritePosition: r.lsn}
+	err := pglogrepl.SendStandbyStatusUpdate(ctx, r.conn, update)
+	return err
+}

@@ -21,6 +21,8 @@ func decodeTextColumnData(ci *pgtype.ConnInfo, data []byte, dataType uint32) (in
 	return decoder.(pgtype.Value).Get(), nil
 }
 
+var connInfo = pgtype.NewConnInfo()
+
 func decodeTuple(rel *pglogrepl.RelationMessage, data *pglogrepl.TupleData) (map[string]interface{}, error) {
 	values := map[string]interface{}{}
 	for idx, col := range data.Columns {
