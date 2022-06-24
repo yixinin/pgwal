@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgproto3/v2"
 )
 
-func read(conn *pgconn.PgConn) (pgproto3.BackendMessage, error) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+func read(ctx context.Context, conn *pgconn.PgConn, timeout time.Duration) (pgproto3.BackendMessage, error) {
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
 	defer cancel()
 	rawMsg, err := conn.ReceiveMessage(ctx)
 	if err != nil {

@@ -5,41 +5,39 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"syscall"
+	"time"
 
 	"github.com/yixinin/pgwal"
 )
 
 func main() {
 	var ctx, cancel = context.WithCancel(context.Background())
-	var database = "postgres"
-	var dsn = fmt.Sprintf("postgres://postgres:1234qwer@postgres:5432/%s?sslmode=disable&replication=database", database)
-	slotName := database + "_walslot1"
-	pubName := database + "_walcmd"
-	repl := pgwal.NewReplica(pubName, slotName, database)
-	err := repl.CreateReplica(ctx, dsn)
-	if err != nil {
-		cancel()
-		fmt.Println(err)
-		return
+	var opts = &pgwal.Options{
+		Database: "postgres",
+		AppName:  "cmd",
+
+		Host:        "postgres",
+		Port:        5432,
+		User:        "postgres",
+		ReadTimeout: 5 * time.Second,
 	}
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println(r, string(debug.Stack()))
-				os.Exit(-1)
-			}
-		}()
-		err = repl.Run(ctx)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}()
+	repl := pgwal.NewReplica(pgwal.PrintPub{}, opts)
+
 	var ch = make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := repl.Run(ctx); err != nil {
+			fmt.Println(err)
+		}
+		ch <- os.Interrupt
+	}()
 	<-ch
 	cancel()
-	repl.Close(ctx)
+
+	err := repl.Close(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
 }

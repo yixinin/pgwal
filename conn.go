@@ -4,36 +4,28 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pglogrepl"
 )
 
 // const outputPlugin = "wal2json"
 const outputPlugin = "pgoutput"
 
-func (r *Replica) CreateReplica(ctx context.Context, dsn string) error {
-	conn, err := pgconn.Connect(ctx, dsn)
+func (r *Replication) CreateOrLoadReplicaSlot(ctx context.Context) error {
+	var sql = fmt.Sprintf("DROP PUBLICATION IF EXISTS %s", r.opts.PublicationName())
+	result := r.conn.Exec(ctx, sql)
+	_, err := result.ReadAll()
 	if err != nil {
 		return err
 	}
-	r.conn = conn
-
-	var sql = fmt.Sprintf("DROP PUBLICATION IF EXISTS %s", r.pubName)
-	result := conn.Exec(ctx, sql)
-	_, err = result.ReadAll()
-	if err != nil {
-		return err
-	}
-	sql = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES", r.pubName)
-	result = conn.Exec(ctx, sql)
+	sql = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES", r.opts.PublicationName())
+	result = r.conn.Exec(ctx, sql)
 	_, err = result.ReadAll()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("created pub", r.pubName)
-	sql = fmt.Sprintf("SELECT restart_lsn FROM pg_replication_slots WHERE slot_name='%s' and database='%s';", r.slotName, r.database)
-	result = conn.Exec(ctx, sql)
+	sql = fmt.Sprintf("SELECT restart_lsn FROM pg_replication_slots WHERE slot_name='%s' and database='%s';", r.opts.SlotName(), r.opts.Database)
+	result = r.conn.Exec(ctx, sql)
 	vals, err := result.ReadAll()
 	if err != nil {
 		return err
@@ -46,26 +38,13 @@ func (r *Replica) CreateReplica(ctx context.Context, dsn string) error {
 				return err
 			}
 			r.lsn = lsn
-			fmt.Println("read old slot position")
 			return nil
 		}
 	}
 
-	// sysident, err := pglogrepl.IdentifySystem(ctx, conn)
-	// if err != nil {
-	// 	return err
-	// }
-	// if sysident.XLogPos > pglogrepl.LSN(0) {
-	// 	r.lsn = sysident.XLogPos
-	// }
-
-	var opts = pglogrepl.CreateReplicationSlotOptions{
-		Temporary: false,
-	}
-
-	res, err := pglogrepl.CreateReplicationSlot(ctx, conn, r.slotName, outputPlugin, opts)
+	var opts = pglogrepl.CreateReplicationSlotOptions{}
+	res, err := pglogrepl.CreateReplicationSlot(ctx, r.conn, r.opts.SlotName(), outputPlugin, opts)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -74,13 +53,10 @@ func (r *Replica) CreateReplica(ctx context.Context, dsn string) error {
 		return err
 	}
 	r.lsn = lsn
-	fmt.Println("created repl slot")
-
 	return nil
 }
 
-func (r *Replica) Close(ctx context.Context) error {
-	fmt.Println("call close")
+func (r *Replication) Close(ctx context.Context) error {
 	var err error
 	r.once.Do(func() {
 		if r.conn != nil {

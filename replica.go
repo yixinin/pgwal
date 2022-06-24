@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sync"
 
 	"github.com/jackc/pgconn"
@@ -12,40 +13,52 @@ import (
 
 // var pluginArguments = []string{"\"pretty-print\" 'true'"}
 
-type Replica struct {
-	once            sync.Once
-	pluginArguments []string
+type Replication struct {
+	once sync.Once
+	opts *Options
 
-	pubName  string
-	slotName string
-	database string
-	// clientXLogPos pglogrepl.LSN
-
+	pub  Publisher
 	conn *pgconn.PgConn
-	// sysident  pglogrepl.IdentifySystemResult
-	relations map[uint32]*pglogrepl.RelationMessage
-	lsn       pglogrepl.LSN
+
+	lsn pglogrepl.LSN
 }
 
-func NewReplica(pubName, slotName, database string) *Replica {
-	r := &Replica{
-		pubName:         pubName,
-		slotName:        slotName,
-		database:        database,
-		relations:       make(map[uint32]*pglogrepl.RelationMessage, 16),
-		pluginArguments: []string{"proto_version '1'", fmt.Sprintf("publication_names '%s'", pubName)},
+func NewReplica(pub Publisher, opts *Options) *Replication {
+	r := &Replication{
+		pub:  pub,
+		opts: opts,
 	}
 	return r
 }
 
-func (r *Replica) Run(ctx context.Context) error {
-	var opts = pglogrepl.StartReplicationOptions{
-		PluginArgs: r.pluginArguments,
-	}
-	err := pglogrepl.StartReplication(ctx, r.conn, r.slotName, r.lsn, opts)
+func (r *Replication) Run(ctx context.Context) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r, string(debug.Stack()))
+		}
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	conn, err := pgconn.Connect(ctx, r.opts.Dsn())
 	if err != nil {
 		return err
 	}
+	r.conn = conn
+
+	if err = r.CreateOrLoadReplicaSlot(ctx); err != nil {
+		return err
+	}
+
+	var opts = pglogrepl.StartReplicationOptions{
+		PluginArgs: r.opts.PluginArguments(),
+	}
+	err = pglogrepl.StartReplication(ctx, r.conn, r.opts.SlotName(), r.lsn, opts)
+	if err != nil {
+		return err
+	}
+	var sesstion = NewSesstion(r.pub)
 	for {
 		select {
 		case <-ctx.Done():
@@ -53,7 +66,7 @@ func (r *Replica) Run(ctx context.Context) error {
 			return nil
 		default:
 		}
-		rawMsg, err := read(r.conn)
+		rawMsg, err := read(ctx, r.conn, r.opts.ReadTimeout)
 		if os.IsTimeout(err) {
 			r.SendStandbyState(ctx)
 			continue
@@ -62,14 +75,17 @@ func (r *Replica) Run(ctx context.Context) error {
 			return err
 		}
 
-		err = r.handle(ctx, rawMsg)
+		ack, lsn, err := sesstion.HandleMessage(ctx, rawMsg)
 		if err != nil {
 			return err
 		}
+		if lsn > 0 {
+			r.lsn = lsn
+		}
+		if ack {
+			if err := r.SendStandbyState(ctx); err != nil {
+				return err
+			}
+		}
 	}
-}
-func (r *Replica) SendStandbyState(ctx context.Context) error {
-	var update = pglogrepl.StandbyStatusUpdate{WALWritePosition: r.lsn}
-	err := pglogrepl.SendStandbyStatusUpdate(ctx, r.conn, update)
-	return err
 }
