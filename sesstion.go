@@ -64,7 +64,7 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 		if err != nil {
 			return false, 0, err
 		}
-
+		fmt.Println("[xlog]", xld.WALStart, xld.ServerWALEnd)
 		logicalMsg, err := pglogrepl.Parse(xld.WALData)
 		if err != nil {
 			return false, 0, err
