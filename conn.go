@@ -62,10 +62,6 @@ func (r *Replication) Close(ctx context.Context) error {
 		if r.conn != nil {
 			n, err := r.conn.Conn().Write([]byte{'X', 0, 0, 0, 4})
 			fmt.Println("closing ...", n, err)
-			// var opts = pglogrepl.DropReplicationSlotOptions{
-			// 	Wait: true,
-			// }
-			// pglogrepl.DropReplicationSlot(ctx, r.conn, r.slotName, opts)
 			err = r.conn.Close(ctx)
 			fmt.Println("conn close", err)
 		}

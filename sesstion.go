@@ -14,6 +14,7 @@ import (
 )
 
 type Session struct {
+	xid       *uint32
 	relations map[uint32]*pglogrepl.RelationMessage
 
 	outMsgPool sync.Pool
@@ -23,6 +24,7 @@ type Session struct {
 
 func NewSesstion(pub Publisher) *Session {
 	return &Session{
+		xid:       new(uint32),
 		pub:       pub,
 		relations: make(map[uint32]*pglogrepl.RelationMessage, 16),
 		outMsgPool: sync.Pool{
@@ -49,7 +51,6 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 	if !ok {
 		return false, 0, fmt.Errorf("received unexpected message: %T", rawMsg)
 	}
-
 	switch msg.Data[0] {
 	case pglogrepl.PrimaryKeepaliveMessageByteID:
 		pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
@@ -64,7 +65,7 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 		if err != nil {
 			return false, 0, err
 		}
-		fmt.Println("[xlog]", xld.WALStart, xld.ServerWALEnd)
+		fmt.Println("[xlog]", xld.WALStart, xld.ServerWALEnd, uint64(xld.ServerWALEnd))
 		logicalMsg, err := pglogrepl.Parse(xld.WALData)
 		if err != nil {
 			return false, 0, err
@@ -76,6 +77,7 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 		case *pglogrepl.BeginMessage:
 			// Indicates the beginning of a group of changes in a transaction. This is only sent for committed transactions. You won't get any events from rolled back transactions.
 			fmt.Println("[begin]", logicalMsg.FinalLSN, logicalMsg.Xid)
+			*(sess.xid) = logicalMsg.Xid
 		case *pglogrepl.CommitMessage:
 			fmt.Println("[commit]", logicalMsg.CommitLSN, logicalMsg.Flags, logicalMsg.TransactionEndLSN)
 		case *pglogrepl.InsertMessage:
@@ -124,6 +126,7 @@ func (sess *Session) handleInsert(ctx context.Context, logicalMsg *pglogrepl.Ins
 	outMsg.CommitTime = commitTime
 	outMsg.New = doc
 	outMsg.Action = "insert"
+	outMsg.Xid = sess.xid
 
 	buf, err := json.Marshal(outMsg)
 	if err != nil {
@@ -155,6 +158,7 @@ func (sess *Session) handleDelete(ctx context.Context, logicalMsg *pglogrepl.Del
 	outMsg.CommitTime = commitTime
 	outMsg.Old = doc
 	outMsg.Action = "delete"
+	outMsg.Xid = sess.xid
 
 	buf, err := json.Marshal(outMsg)
 	if err != nil {
@@ -179,7 +183,7 @@ func (sess *Session) handleUpdate(ctx context.Context, logicalMsg *pglogrepl.Upd
 		outMsg.Reset()
 		sess.outMsgPool.Put(outMsg)
 	}()
-
+	outMsg.Xid = sess.xid
 	outMsg.Action = "update"
 	outMsg.Table = fmt.Sprintf("%s.%s", rel.Namespace, rel.RelationName)
 	outMsg.CommitTime = commitTime

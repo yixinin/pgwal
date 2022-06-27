@@ -6,6 +6,7 @@ import (
 
 type OutMessage struct {
 	Table      string                 `json:"table"`
+	Xid        *uint32                `json:"xid"`
 	Old        map[string]interface{} `json:"old"`
 	New        map[string]interface{} `json:"new"`
 	Action     string                 `json:"action"`

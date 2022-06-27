@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -34,8 +35,12 @@ func main() {
 				return
 			default:
 			}
-			if err := repl.Run(ctx); err != nil {
+			err := repl.Run(ctx)
+			if err != nil {
 				fmt.Println(err)
+			}
+			if err == nil || errors.Is(err, context.Canceled) {
+				return
 			}
 			// after 10 seconds, restart
 			fmt.Println("restarting ...")
