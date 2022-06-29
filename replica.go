@@ -34,10 +34,7 @@ func NewReplica(pub Publisher, opts *Options) *Replication {
 func (r *Replication) Run(ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println(r, string(debug.Stack()))
-		}
-		if err != nil {
-			fmt.Println(err)
+			err = fmt.Errorf("panic recovered, err:%v, stacks:%s", r, debug.Stack())
 		}
 	}()
 
@@ -46,6 +43,10 @@ func (r *Replication) Run(ctx context.Context) (err error) {
 		return err
 	}
 	r.conn = conn
+
+	if err = r.CreatePublication(ctx, r.opts.Tables...); err != nil {
+		return err
+	}
 
 	if err = r.CreateOrLoadReplicaSlot(ctx); err != nil {
 		return err
@@ -66,7 +67,7 @@ func (r *Replication) Run(ctx context.Context) (err error) {
 			return nil
 		default:
 		}
-		rawMsg, err := read(ctx, r.conn, r.opts.ReadTimeout)
+		rawMsg, err := ReadWithTimeout(ctx, r.conn, r.opts.ReadTimeout)
 		if os.IsTimeout(err) {
 			r.SendStandbyState(ctx)
 			continue

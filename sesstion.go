@@ -38,9 +38,7 @@ func NewSesstion(pub Publisher) *Session {
 func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendMessage) (ack bool, lsn pglogrepl.LSN, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println(r)
-			fmt.Println(string(debug.Stack()))
-			err = fmt.Errorf("recovered:%v", r)
+			err = fmt.Errorf("panic recovered err:%v, stacks:%s", r, debug.Stack())
 		}
 	}()
 	if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
@@ -65,7 +63,6 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 		if err != nil {
 			return false, 0, err
 		}
-		fmt.Println("[xlog]", xld.WALStart, xld.ServerWALEnd, uint64(xld.ServerWALEnd))
 		logicalMsg, err := pglogrepl.Parse(xld.WALData)
 		if err != nil {
 			return false, 0, err
@@ -76,10 +73,8 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 			sess.relations[logicalMsg.RelationID] = logicalMsg
 		case *pglogrepl.BeginMessage:
 			// Indicates the beginning of a group of changes in a transaction. This is only sent for committed transactions. You won't get any events from rolled back transactions.
-			fmt.Println("[begin]", logicalMsg.FinalLSN, logicalMsg.Xid)
 			*(sess.xid) = logicalMsg.Xid
 		case *pglogrepl.CommitMessage:
-			fmt.Println("[commit]", logicalMsg.CommitLSN, logicalMsg.Flags, logicalMsg.TransactionEndLSN)
 		case *pglogrepl.InsertMessage:
 			err = sess.handleInsert(ctx, logicalMsg, xld.ServerTime)
 			if err != nil {
@@ -100,7 +95,7 @@ func (sess *Session) HandleMessage(ctx context.Context, rawMsg pgproto3.BackendM
 		case *pglogrepl.OriginMessage:
 		default:
 			err = fmt.Errorf("unknown message type in pgoutput stream: %T", logicalMsg)
-			return false, 0, nil
+			return false, 0, err
 		}
 		lsn = xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 		return true, lsn, nil
@@ -132,11 +127,7 @@ func (sess *Session) handleInsert(ctx context.Context, logicalMsg *pglogrepl.Ins
 	if err != nil {
 		return
 	}
-	sess.pub.SendAsync(buf, func(data []byte, err error) {
-		if err != nil {
-			fmt.Println(err)
-		}
-	})
+	sess.pub.SendAsync(buf)
 	return
 }
 
@@ -164,11 +155,7 @@ func (sess *Session) handleDelete(ctx context.Context, logicalMsg *pglogrepl.Del
 	if err != nil {
 		return
 	}
-	sess.pub.SendAsync(buf, func(data []byte, err error) {
-		if err != nil {
-			fmt.Println(err)
-		}
-	})
+	sess.pub.SendAsync(buf)
 	return
 }
 
@@ -207,10 +194,6 @@ func (sess *Session) handleUpdate(ctx context.Context, logicalMsg *pglogrepl.Upd
 	if err != nil {
 		return err
 	}
-	sess.pub.SendAsync(buf, func(data []byte, err error) {
-		if err != nil {
-			fmt.Println(err)
-		}
-	})
+	sess.pub.SendAsync(buf)
 	return
 }

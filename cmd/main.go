@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,7 +23,7 @@ func main() {
 		User:        "postgres",
 		ReadTimeout: 5 * time.Second,
 	}
-	repl := pgwal.NewReplica(pgwal.PrintPub{}, opts)
+	repl := pgwal.NewReplica(pgwal.MockPub{}, opts)
 
 	var ch = make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -37,13 +37,13 @@ func main() {
 			}
 			err := repl.Run(ctx)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 			}
 			if err == nil || errors.Is(err, context.Canceled) {
 				return
 			}
 			// after 10 seconds, restart
-			fmt.Println("restarting ...")
+			log.Println("restarting ...")
 			time.Sleep(10 * time.Second)
 		}
 	}()
@@ -52,6 +52,6 @@ func main() {
 
 	err := repl.Close(ctx)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 }

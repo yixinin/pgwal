@@ -3,6 +3,7 @@ package pgwal
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pglogrepl"
 )
@@ -10,22 +11,27 @@ import (
 // const outputPlugin = "wal2json"
 const outputPlugin = "pgoutput"
 
-func (r *Replication) CreateOrLoadReplicaSlot(ctx context.Context) error {
+func (r *Replication) CreatePublication(ctx context.Context, tables ...string) error {
 	var sql = fmt.Sprintf("DROP PUBLICATION IF EXISTS %s", r.opts.PublicationName())
 	result := r.conn.Exec(ctx, sql)
 	_, err := result.ReadAll()
 	if err != nil {
 		return err
 	}
-	sql = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES", r.opts.PublicationName())
-	result = r.conn.Exec(ctx, sql)
-	_, err = result.ReadAll()
-	if err != nil {
-		return err
+	if len(tables) == 0 {
+		sql = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES", r.opts.PublicationName())
+	} else {
+		sql = fmt.Sprintf("CREATE PUBLICATION %s FOR Table %s", r.opts.PublicationName(), strings.Join(tables, ","))
 	}
 
-	sql = fmt.Sprintf("SELECT restart_lsn FROM pg_replication_slots WHERE slot_name='%s' and database='%s';", r.opts.SlotName(), r.opts.Database)
 	result = r.conn.Exec(ctx, sql)
+	_, err = result.ReadAll()
+	return err
+}
+
+func (r *Replication) CreateOrLoadReplicaSlot(ctx context.Context) error {
+	sql := fmt.Sprintf("SELECT restart_lsn FROM pg_replication_slots WHERE slot_name='%s' and database='%s';", r.opts.SlotName(), r.opts.Database)
+	result := r.conn.Exec(ctx, sql)
 	vals, err := result.ReadAll()
 	if err != nil {
 		return err
@@ -60,10 +66,8 @@ func (r *Replication) Close(ctx context.Context) error {
 	var err error
 	r.once.Do(func() {
 		if r.conn != nil {
-			n, err := r.conn.Conn().Write([]byte{'X', 0, 0, 0, 4})
-			fmt.Println("closing ...", n, err)
-			err = r.conn.Close(ctx)
-			fmt.Println("conn close", err)
+			_, _ = r.conn.Conn().Write([]byte{'X', 0, 0, 0, 4})
+			_ = r.conn.Close(ctx)
 		}
 	})
 	return err

@@ -7,17 +7,17 @@ import (
 
 type Publisher interface {
 	Send(ctx context.Context, data []byte) error
-	SendAsync(data []byte, f func(data []byte, err error))
+	SendAsync(data []byte)
 }
 
-type PrintPub struct {
+type MockPub struct {
 }
 
-func (PrintPub) Send(ctx context.Context, data []byte) error {
+func (MockPub) Send(ctx context.Context, data []byte) error {
 	fmt.Println(string(data))
 	return nil
 }
 
-func (PrintPub) SendAsync(data []byte, f func(data []byte, err error)) {
+func (MockPub) SendAsync(data []byte) {
 	fmt.Println(string(data))
 }

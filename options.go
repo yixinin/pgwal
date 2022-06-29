@@ -18,6 +18,8 @@ type Options struct {
 
 	AppName string
 
+	Tables []string
+
 	ReadTimeout time.Duration
 }
 
