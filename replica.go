@@ -41,7 +41,7 @@ func (r *Replication) Run(ctx context.Context) (err error) {
 		}
 	}()
 
-	conn, err := pgconn.Connect(ctx, r.opts.Dsn())
+	conn, err := pgconn.Connect(ctx, r.opts.ReplicationDsn())
 	if err != nil {
 		return err
 	}

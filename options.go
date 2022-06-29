@@ -21,11 +21,20 @@ type Options struct {
 	ReadTimeout time.Duration
 }
 
-func (o Options) Dsn() string {
+func (o Options) ReplicationDsn() string {
 	if o.Password == "" {
 		o.Password = "pwd" // useless
 	}
 	var dsn = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable&replication=database",
+		o.User, o.Password, o.Host, o.Port, o.Database)
+	return dsn
+}
+
+func (o Options) Dsn() string {
+	if o.Password == "" {
+		o.Password = "pwd" // useless
+	}
+	var dsn = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		o.User, o.Password, o.Host, o.Port, o.Database)
 	return dsn
 }
