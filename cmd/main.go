@@ -22,6 +22,10 @@ func main() {
 		Port:        5432,
 		User:        "postgres",
 		ReadTimeout: 5 * time.Second,
+		Tables: []string{
+			"ttb",
+			"ttb1",
+		},
 	}
 	repl := pgwal.NewReplica(pgwal.MockPub{}, opts)
 

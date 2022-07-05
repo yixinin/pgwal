@@ -72,3 +72,14 @@ func (r *Replication) Close(ctx context.Context) error {
 	})
 	return err
 }
+
+func (r *Replication) SetTableReplicaIdentity(ctx context.Context, tables []string) error {
+	for _, v := range tables {
+		var query = fmt.Sprintf("alter table %s replica identity full;", v)
+		_, err := r.conn.Exec(ctx, query).ReadAll()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

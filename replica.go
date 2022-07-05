@@ -43,7 +43,9 @@ func (r *Replication) Run(ctx context.Context) (err error) {
 		return err
 	}
 	r.conn = conn
-
+	if err = r.SetTableReplicaIdentity(ctx, r.opts.Tables); err != nil {
+		return err
+	}
 	if err = r.CreatePublication(ctx, r.opts.Tables...); err != nil {
 		return err
 	}
