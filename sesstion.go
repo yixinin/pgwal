@@ -121,7 +121,9 @@ func (sess *Session) handleInsert(ctx context.Context, logicalMsg *pglogrepl.Ins
 	outMsg.CommitTime = commitTime
 	outMsg.New = doc
 	outMsg.Action = "insert"
-	outMsg.Xid = sess.xid
+	if sess.xid != nil {
+		outMsg.Xid = *sess.xid
+	}
 
 	buf, err := json.Marshal(outMsg)
 	if err != nil {
@@ -149,7 +151,9 @@ func (sess *Session) handleDelete(ctx context.Context, logicalMsg *pglogrepl.Del
 	outMsg.CommitTime = commitTime
 	outMsg.Old = doc
 	outMsg.Action = "delete"
-	outMsg.Xid = sess.xid
+	if sess.xid != nil {
+		outMsg.Xid = *sess.xid
+	}
 
 	buf, err := json.Marshal(outMsg)
 	if err != nil {
@@ -170,10 +174,12 @@ func (sess *Session) handleUpdate(ctx context.Context, logicalMsg *pglogrepl.Upd
 		outMsg.Reset()
 		sess.outMsgPool.Put(outMsg)
 	}()
-	outMsg.Xid = sess.xid
 	outMsg.Action = "update"
 	outMsg.Table = fmt.Sprintf("%s.%s", rel.Namespace, rel.RelationName)
 	outMsg.CommitTime = commitTime
+	if sess.xid != nil {
+		outMsg.Xid = *sess.xid
+	}
 
 	if logicalMsg.OldTuple != nil {
 		doc, err := decodeTuple(rel, logicalMsg.OldTuple)

@@ -5,6 +5,13 @@
 * Notice: if publication or slot no longer use, do not forget to clean it.
 
 
+### get current txid(xmin)
+``` sql
+  begin;
+  select txid_current();
+  -- do update
+  end;
+```
 ### REPLICA IDENTITY
 - default
   ``` sql

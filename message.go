@@ -6,11 +6,11 @@ import (
 
 type OutMessage struct {
 	Table      string                 `json:"table"`
-	Xid        *uint32                `json:"xid"`
+	Xid        uint32                 `json:"xid"`
 	Old        map[string]interface{} `json:"old"`
 	New        map[string]interface{} `json:"new"`
 	Action     string                 `json:"action"`
-	CommitTime time.Time              `json:"commit_time"`
+	CommitTime time.Time              `json:"commitTime"`
 }
 
 func (m *OutMessage) Reset() {
